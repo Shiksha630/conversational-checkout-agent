@@ -145,8 +145,8 @@ npm run install:all
 Create a `.env` file in the root directory:
 ```env
 ANTHROPIC_API_KEY=your_anthropic_api_key
-RAZORPAY_KEY_ID=rzp_test_TVZUaXzsVeHZpK
-RAZORPAY_KEY_SECRET=rXxK0tDUAx5Yr2pIDnLkGWg1
+RAZORPAY_KEY_ID=rzp_test_your_key_id_here
+RAZORPAY_KEY_SECRET=your_key_secret_here
 PORT=5000
 ```
 
