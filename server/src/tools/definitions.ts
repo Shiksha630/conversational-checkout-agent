@@ -124,4 +124,124 @@ export const agentTools: Tool[] = [
       required: ['user_id', 'remind_date', 'description'],
     },
   },
+
+  // ─── SHOPIFY STOREFRONT TOOLS ─────────────────────────────────────────────
+  {
+    name: 'shopify_search_products',
+    description: 'Search the Shopify store for products matching a keyword (e.g. "sneakers", "phone case", "t-shirt"). Returns up to 5 matching products with titles, prices, and variant options.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The search keyword or product name (e.g. "running shoes", "bluetooth headphones", "vitamin C serum").',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of products to return (1–5). Default: 4.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'shopify_select_product',
+    description: 'Get full details of a specific Shopify product by its product ID, including all variants with exact prices and availability status.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        product_id: {
+          type: 'string',
+          description: 'The Shopify product GID (e.g. "gid://shopify/Product/123456789").',
+        },
+      },
+      required: ['product_id'],
+    },
+  },
+  {
+    name: 'shopify_create_cart',
+    description: 'Add a product variant to the Shopify cart and get the total order amount and checkout URL. Call this once the user has confirmed which product/variant they want to buy.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        variant_id: {
+          type: 'string',
+          description: 'The Shopify ProductVariant GID (e.g. "gid://shopify/ProductVariant/987654321").',
+        },
+        quantity: {
+          type: 'number',
+          description: 'Number of units to add to cart. Default: 1.',
+        },
+        user_id: {
+          type: 'string',
+          description: 'The user ID for creating the Razorpay payment order.',
+        },
+      },
+      required: ['variant_id', 'user_id'],
+    },
+  },
+
+  // ─── Food Ordering Tools ───────────────────────────────────────────────────
+  {
+    name: 'food_search_restaurant',
+    description: 'Search for a restaurant by name or cuisine type in the local restaurant database. Returns restaurant details and full menu.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Restaurant name or cuisine type to search for (e.g. "Biryani House", "pizza", "south indian")',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'food_place_order',
+    description: 'Place a food order for a specific menu item from a restaurant. Creates a Razorpay payment order for the total amount (food price + delivery fee). Returns the confirmation details including total amount and estimated delivery time.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        restaurant_id: {
+          type: 'string',
+          description: 'The restaurant ID (e.g. "rest_bh")',
+        },
+        item_id: {
+          type: 'string',
+          description: 'The menu item ID to order (e.g. "item_bh_01")',
+        },
+        user_id: {
+          type: 'string',
+          description: 'The user ID placing the order',
+        },
+      },
+      required: ['restaurant_id', 'item_id', 'user_id'],
+    },
+  },
+  {
+    name: 'create_payment_link',
+    description: 'Create a direct Razorpay Payment Link (short_url) that can be sent to the customer via SMS/WhatsApp or opened in browser.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'Payment amount in INR (e.g. 500 for ₹500)',
+        },
+        description: {
+          type: 'string',
+          description: 'Purpose or description of the payment link',
+        },
+        user_id: {
+          type: 'string',
+          description: 'User ID requesting the link',
+        },
+        expiry_minutes: {
+          type: 'number',
+          description: 'Link expiration time in minutes (default: 30)',
+        },
+      },
+      required: ['amount', 'description', 'user_id'],
+    },
+  },
 ];

@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { config } from './config';
 import { dbService, initDatabase } from './db';
-import { seedDatabase } from './db/seed';
+import { seedDatabase, seedRestaurantsIfEmpty } from './db/seed';
 import { processChat } from './services/claude';
 import { executeTool } from './tools/handlers';
 import { eventBus } from './events/eventBus';
@@ -12,8 +12,9 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Initialize DB and ensure schema exists
+// Initialize DB schema and auto-seed restaurants (idempotent)
 initDatabase();
+seedRestaurantsIfEmpty();
 
 // 1. Health & Config check
 app.get('/api/health', (req: Request, res: Response) => {
@@ -130,7 +131,27 @@ app.get('/api/reminders/:userId', (req: Request, res: Response) => {
   res.json(reminders);
 });
 
-// 7. Seed / Reset Endpoint
+// 7. Merchant Catalog & Food Orders (Track 1 Agent-Readable Catalog)
+app.get('/api/catalog', (req: Request, res: Response) => {
+  const restaurants = dbService.searchRestaurants('');
+  const catalog = restaurants.map((r) => ({
+    ...r,
+    menu: dbService.getMenuItems(r.id),
+  }));
+  res.json({
+    merchant_type: 'restaurant_network',
+    count: catalog.length,
+    restaurants: catalog,
+  });
+});
+
+app.get('/api/food-orders/:userId', (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  const orders = dbService.getFoodOrders(userId);
+  res.json(orders);
+});
+
+// 8. Seed / Reset Endpoint
 app.post('/api/seed', (req: Request, res: Response) => {
   seedDatabase();
   eventBus.emitEvent('SYSTEM_LOG', 'Database Reset & Re-seeded', 'Reset users, transactions, and reminders.');

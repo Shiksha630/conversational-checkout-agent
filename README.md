@@ -1,45 +1,45 @@
-# ⚡ Conversational Checkout Agent
-> **Razorpay AI Growth & Agentic Commerce Hackathon Submission**  
-> An autonomous tool-calling AI agent that executes purchases, utility recharges, subscription renewals, and repeat food/grocery orders entirely through natural language chat with integrated Razorpay payment gateway execution.
+# ⚡ Razorpay Conversational Checkout Agent
+> **Razorpay AI Buildathon 2026 — Track 1: AI Growth & Agentic Commerce**  
+> An autonomous, explainable, and bounded AI Commerce Agent that connects buyers to merchant product catalogs, executes end-to-end purchasing, handles stock management & failures gracefully, and settles transactions using real Razorpay Test-Mode APIs.
 
 ---
 
-## 📌 Executive Summary & Problem Statement
+## 🏆 Track 1 Requirements Verification Matrix
 
-### The Problem
-Traditional e-commerce and fintech checkout funnels suffer from severe drop-offs (often 60–75%) because users must navigate complex multi-step user interfaces: selecting operators, choosing specific plans, navigating billing forms, manually typing OTPs/VPA handles, and confirming review screens.
-
-### The Solution: Razorpay Agentic Commerce
-The **Conversational Checkout Agent** replaces rigid checkout menus with a continuous, intent-driven conversational loop:
-1. **Zero Menu Navigation:** The customer types natural requests like *"recharge my phone"*, *"reorder my usual coffee"*, or *"renew gym membership"*.
-2. **Context-Aware Personalization:** The AI agent autonomously invokes backend tools to inspect historical patterns and preferred payment methods (UPI, Cards, Mandates).
-3. **Interactive One-Click Checkout:** Rather than raw text links, the agent generates actionable **Razorpay Payment Cards** within the stream.
-4. **Resilient Mid-Flow Changes:** Users can dynamically modify attributes (e.g. *"actually make it ₹500"* or *"switch to my credit card"*) without restarting the conversation.
-5. **Post-Payment Proactivity:** Captures payment verification, logs transactions in database, and schedules automated renewal reminders.
+| Requirement | Implementation in this Codebase | Evidence / Location |
+|---|---|---|
+| **1. Merchant Catalog & Inventory** | Native SQLite multi-merchant catalog (`restaurants`, `menu_items`) with structured fields (`id`, `name`, `price`, `is_veg`, `stock_quantity`), automatic stock decrement upon purchase, and REST inspection endpoint. | `server/src/db/index.ts`, `GET /api/catalog` |
+| **2. Conversational Agent** | Multi-turn reasoning agent that parses natural language requests, handles semantic search across restaurants and menus, filters by budget/diet, and prompts for clarification on ambiguous inputs. | `server/src/services/claude.ts` |
+| **3. Razorpay Integration** | Live integration with Razorpay Test Mode using **Orders API** (`orders.create`), **Payment Links API** (`paymentLink.create`), and HMAC-SHA256 signature verification (`payments.fetch`). | `server/src/services/razorpay.ts` |
+| **4. The Bar (4 Pillars)** | **Explainable:** Agent narrates exact reasoning for every item choice.<br>**Bounded:** Per-order spend cap (₹2000) enforced before checkout.<br>**Gated:** Interactive proposal card requiring explicit user confirmation before payment.<br>**Auditable:** Real-time EventBus logging all decisions streamed via SSE. | `server/src/events/eventBus.ts`, `FoodOrderCard.tsx` |
+| **5. Failure Handling** | Graceful recovery from: (a) Out-of-stock items with alternatives, (b) Ambiguous inputs without restaurant names, (c) Unknown merchants, (d) Upstream API downtime fallback. | `server/src/tools/handlers.ts` |
+| **6. Deliverables** | Clean repository structure, detailed architecture documentation with design decisions, demo scripts, and verifiable REST endpoints. | `README.md` |
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ System Architecture & Design Decisions
 
 ```
                                ┌─────────────────────────────────────────┐
                                │       React + Tailwind Frontend         │
-                               │   (Chat Stream, Cards, Event Drawer)    │
+                               │  (Interactive Cards, Live Event Stream) │
                                └────────────────────┬────────────────────┘
                                                     │
                                       HTTP / REST   │  SSE Event Stream
                                                     ▼
                                ┌─────────────────────────────────────────┐
                                │        Node.js + Express (TS)           │
-                               │             /api/chat                   │
+                               │     /api/chat | /api/catalog | /api/seed│
                                └────────────────────┬────────────────────┘
                                                     │
                      ┌──────────────────────────────┴──────────────────────────────┐
                      ▼                                                             ▼
        ┌───────────────────────────┐                                 ┌───────────────────────────┐
-       │   Claude Agent SDK Core   │                                 │   In-Memory Event Bus     │
-       │   (Tool-Calling Loop)     │                                 │ (Kafka-style architecture)│
-       └─────────────┬─────────────┘                                 └─────────────┬─────────────┘
+       │   Agentic Reasoning Core  │                                 │   Event-Driven Audit Log  │
+       │   • Intent Classifier     │                                 │ (Real-time SSE event bus) │
+       │   • Explainability Engine │                                 └─────────────┬─────────────┘
+       │   • Bounded Spend Guard   │                                               │
+       └─────────────┬─────────────┘                                               │
                      │                                                             │
         ┌────────────┴──────────────────────────────────────────┐                  │
         ▼                                                       ▼                  ▼
@@ -47,13 +47,52 @@ The **Conversational Checkout Agent** replaces rigid checkout menus with a conti
 │     Agent Tools Execution     │               │   Live Architecture Inspector │
 │                               │               │   (Streamed to Frontend UI)   │
 ├───────────────────────────────┤               └───────────────────────────────┘
-│ • get_user_history            │
-│ • create_payment_order        │──────────────► 💳 Razorpay Gateway API (Test Mode)
+│ • food_search_restaurant      │
+│ • food_place_order (decrement)│──────────────► 💳 Razorpay Orders API (Test Mode)
+│ • create_payment_link         │──────────────► 💳 Razorpay Payment Links API
 │ • verify_payment              │
-│ • log_transaction             │──────────────► 🗄️ SQLite Database Engine
+│ • log_transaction             │──────────────► 🗄️ SQLite Database (better-sqlite3)
 │ • schedule_reminder           │
 └───────────────────────────────┘
 ```
+
+### Key Architectural Decisions
+
+1. **Why SQLite (`better-sqlite3`) for the Merchant Catalog?**
+   - Enables synchronous, zero-latency in-process database queries during LLM tool-calling loops.
+   - Provides ACID transaction safety when decrementing stock quantities and recording financial ledger entries (`transactions`, `food_orders`).
+2. **Why Dual-Mode Razorpay Execution (Orders API + Payment Links)?**
+   - **Orders API:** Powers the in-chat seamless interactive card checkout with instant signature verification.
+   - **Payment Links API:** Enables sharing payment links directly via SMS, WhatsApp, or external channels for asynchronous checkout.
+3. **Why Dual-Engine Execution (Anthropic Claude + Smart Rule Simulation)?**
+   - The agent uses Claude 3.5 Sonnet tool-calling by default.
+   - If the external LLM API encounters rate limits or credit exhaustion, it automatically falls back to a deterministic 9-state conversational engine, ensuring zero downtime during judging and demos.
+4. **Why SSE (Server-Sent Events) for Auditability?**
+   - Every AI reasoning step, tool invocation, and payment event is pushed in real-time to the frontend "Live Events" inspector drawer, satisfying the auditable requirement without noisy polling.
+
+---
+
+## 🛡️ "The Bar" — Safe & Responsible Agentic Commerce
+
+| Principle | How It Is Implemented |
+|---|---|
+| **🧠 Explainable** | Before dispatching any payment order, the agent includes an explicit reasoning header: `🧠 Agent Reasoning: I matched 'Chicken Biryani' → Chicken Biryani (🔴 Non-Veg, Biryani) at Biryani House — closest match to your request.` |
+| **🛡️ Bounded** | Every food order enforces a strict `FOOD_SPEND_CAP = ₹2000`. If an order exceeds this bound, the agent halts and demands explicit user re-authorization. |
+| **🔒 Gated** | Money is never automatically deducted. The agent creates an order draft and renders an interactive proposal card. The customer must click **Pay via Razorpay** to trigger checkout. |
+| **📜 Auditable** | Every state transition (`USER_INTENT_PARSED` → `PAYMENT_ORDER_INITIATED` → `AGENT_PROPOSAL_DISPATCHED` → `PAYMENT_CAPTURED` → `TRANSACTION_COMMITTED`) is recorded in the SQLite ledger and broadcast over SSE. |
+
+---
+
+## 🚨 Failure Handling Scenarios (Built-in Resilience)
+
+1. **Out-of-Stock Handling:**
+   - When `stock_quantity` reaches `0`, `food_place_order` refuses the transaction, logs an out-of-stock event, and returns 3 available alternatives from the same restaurant.
+2. **Ambiguous Query Disambiguation:**
+   - If the user asks *"Order biryani"* without specifying a restaurant, the agent detects the ambiguity and displays matching restaurants rather than guessing.
+3. **Unknown Restaurant / Item Fallback:**
+   - If a requested merchant or item is not found, the agent displays the full directory and suggests closest alternatives.
+4. **Resilient Mid-Flow Parameter Modification:**
+   - Users can dynamically adjust quantities or amounts (*"actually make it ₹500"*) or switch payment methods (*"use credit card"*) without breaking state.
 
 ---
 
@@ -61,21 +100,12 @@ The **Conversational Checkout Agent** replaces rigid checkout menus with a conti
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| **Agent Layer** | `@anthropic-ai/sdk` (Claude 3.5) | Tool calling, intent extraction, multi-turn state management |
+| **Agent Layer** | Anthropic Claude SDK (Claude 3.5 Sonnet) + State Machine Fallback | Tool calling, natural language understanding, conversational state |
 | **Backend API** | Node.js + Express + TypeScript (`tsx`) | REST endpoints, tool orchestration, payment callbacks |
-| **Database** | SQLite (`better-sqlite3`) | Persistent storage for users, purchase history, transactions, reminders |
-| **Payment Gateway** | Razorpay Node SDK & Checkout.js | Live test order creation, payment capture, and signature verification |
-| **Event System** | Node.js `EventEmitter` + SSE | Models discrete commerce state events (`ORDER_INIT` → `PROPOSAL` → `CAPTURE` → `COMMITTED`) |
-| **Frontend UI** | React 18 (Vite) + Tailwind CSS + Lucide | Polished chat interface, interactive proposal cards, receipt modals, event visualizer |
-
----
-
-## 🗄️ Database Schema
-
-- `users`: `(id, name, phone, email, preferred_payment_method, avatar_url, created_at)`
-- `purchase_history`: `(id, user_id, type ['recharge'|'subscription'|'reorder'], amount, currency, description, metadata_json, date)`
-- `transactions`: `(id, user_id, razorpay_order_id, razorpay_payment_id, amount, currency, status, payment_method, description, created_at)`
-- `reminders`: `(id, user_id, remind_date, description, status, created_at)`
+| **Database & Catalog** | SQLite (`better-sqlite3`) | Own merchant catalog, inventory tracking, financial transactions |
+| **Payment Gateway** | Razorpay Node SDK & Checkout.js | Live test order creation, payment links, and HMAC verification |
+| **Event System** | Node.js `EventEmitter` + SSE | Real-time audit trail and architectural event streaming |
+| **Frontend UI** | React 18 (Vite) + Tailwind CSS + Lucide Icons | Responsive chat interface, interactive proposal cards, order tracker |
 
 ---
 
@@ -83,72 +113,53 @@ The **Conversational Checkout Agent** replaces rigid checkout menus with a conti
 
 ### 1. Clone & Navigate
 ```bash
-cd /Users/shiksha/Desktop/conversational-checkout-agent
+git clone https://github.com/Shiksha630/conversational-checkout-agent.git
+cd conversational-checkout-agent
 ```
 
 ### 2. Configure Environment Variables
-Copy `.env.example` to `.env` (optional — works with built-in high-fidelity sandbox mode if keys are not immediately configured):
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+Create a `.env` file in the root directory:
 ```env
 ANTHROPIC_API_KEY=your_anthropic_api_key
-RAZORPAY_KEY_ID=rzp_test_your_key_id
-RAZORPAY_KEY_SECRET=your_key_secret
+RAZORPAY_KEY_ID=rzp_test_TVZUaXzsVeHZpK
+RAZORPAY_KEY_SECRET=rXxK0tDUAx5Yr2pIDnLkGWg1
 PORT=5000
 ```
 
-### 3. Install All Dependencies
+### 3. Install Dependencies
 ```bash
 npm run install:all
 ```
 
-### 4. Seed Database
-```bash
-npm run seed
-```
-
-### 5. Launch Full-Stack Application
+### 4. Launch Application
 ```bash
 npm run dev
 ```
-- **Frontend:** [http://localhost:3000](http://localhost:3000)
-- **Backend Server:** [http://localhost:5000](http://localhost:5000)
+- **Frontend App:** http://localhost:3000
+- **Backend Server:** http://localhost:5000
+- **Merchant Catalog API:** http://localhost:5000/api/catalog
 
 ---
 
-## 🎬 Demo Walkthrough & Conversation Scripts
+## 🎬 Live Demo Scripts to Try
 
-### Persona 1: Rahul Sharma (Utility Recharge Flow)
-1. Select **Rahul** from the persona bar.
-2. Click suggestion or type: `"recharge my phone"`
-3. **Agent Action:** Calls `get_user_history("usr_rahul")` → finds Airtel 5G ₹399 plan → Calls `create_payment_order(...)`.
-4. **Agent Response:** Renders interactive Payment Proposal Card for ₹399 via UPI.
-5. **Mid-Flow Modification:** Type: `"actually make it ₹500"`
-6. **Agent Action:** Agent modifies the order seamlessly to ₹500 without restarting context.
-7. Click **Pay via Razorpay** → Select Payment Method → Payment captures instantly.
-8. **Agent Action:** Calls `verify_payment` and `log_transaction`, displays receipt, and offers proactive renewal reminder.
-9. Type: `"yes, set a reminder"` → Agent calls `schedule_reminder`.
+### Demo 1: End-to-End Food Order with Real Razorpay Order Creation
+- **Prompt:** `"Order Chicken Biryani from Biryani House"`
+- **Result:** Agent explains reasoning → checks stock (decrements) → calculates ₹380 + ₹40 = ₹420 → creates Razorpay test order → displays `FoodOrderCard`.
+- **Payment:** Click **Pay ₹420 & Place Order** → select UPI → Payment captured → Live delivery tracking animation begins.
 
-### Persona 2: Priya Patel (Subscription Renewal Flow)
-1. Select **Priya** from the persona bar.
-2. Type: `"renew my gym membership"`
-3. **Agent Action:** Recognizes Cultpass ELITE membership (₹1,499) with preferred Credit Card.
-4. Click **Pay via Razorpay** to renew.
+### Demo 2: Razorpay Payment Link Generation
+- **Prompt:** `"Send me a payment link for ₹750"`
+- **Result:** Agent calls Razorpay Payment Links API → returns a real clickable short URL (`https://rzp.io/l/...`).
 
-### Persona 3: Ananya Roy (Repeat Order Flow)
-1. Select **Ananya** from the persona bar.
-2. Type: `"reorder my usual coffee order"`
-3. **Agent Action:** Recommends Third Wave Coffee (Vanilla Latte + Croissant - ₹420).
-4. Complete checkout in one tap.
+### Demo 3: Failure Handling — Ambiguous Query
+- **Prompt:** `"Order Biryani"`
+- **Result:** Agent politely asks which restaurant you want (Biryani House, Dosa Corner, etc.).
 
----
+### Demo 4: Failure Handling — Out of Stock
+- **Action:** Decrement stock to 0 via DB or repeat purchases.
+- **Result:** Agent informs user that item is sold out and recommends 3 in-stock alternatives.
 
-## 🏆 Key Hackathon Highlights
-
-- **Native Tool Calling:** Uses standard JSON schema tool definitions for deterministic AI actions.
-- **Razorpay Production Stack Parity:** Implements Razorpay Orders API (`orders.create`), Payment Verification (`payments.fetch` / HMAC SHA256), and Standard Checkout Modal.
-- **Event-Driven Architecture:** Kafka-style event bus tracking the lifecycle of every transaction with real-time UI streaming.
-- **Graceful Error Recovery:** Built-in resilience for ambiguous intents, modified parameters, and zero-downtime offline sandbox fallback.
+### Demo 5: Re-orders & Proactive Subscriptions
+- **Prompt:** `"Recharge my phone"` or `"Renew my gym membership"`
+- **Result:** Agent retrieves personal history → generates gated proposal card → offers proactive renewal reminder.

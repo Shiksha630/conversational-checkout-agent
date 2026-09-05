@@ -33,6 +33,7 @@ export const api = {
     message: string;
     toolCalls: any[];
     checkoutProposal?: any;
+    foodOrderProposal?: any;
     reminderDetails?: any;
     suggestedPrompts?: string[];
   }> {

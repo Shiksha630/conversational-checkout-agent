@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChatMessage, User } from '../types';
 import { ConfirmCard } from './ConfirmCard';
+import { FoodOrderCard } from './FoodOrderCard';
 import { Bot, ChevronDown, ChevronRight, Terminal, CheckCircle, BellRing, Sparkles } from 'lucide-react';
 
 interface MessageItemProps {
@@ -109,6 +110,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         {!isUser && message.checkoutProposal && (
           <ConfirmCard
             proposal={message.checkoutProposal}
+            isPaid={Boolean(message.paymentResult || message.paymentStatus === 'paid')}
+            onPaymentSuccess={(result) => onPaymentSuccess(result)}
+            onModify={(text) => onQuickAction(text)}
+          />
+        )}
+
+        {/* Embedded Food Order Confirmation Card */}
+        {!isUser && message.foodOrderProposal && (
+          <FoodOrderCard
+            data={message.foodOrderProposal}
             isPaid={Boolean(message.paymentResult || message.paymentStatus === 'paid')}
             onPaymentSuccess={(result) => onPaymentSuccess(result)}
             onModify={(text) => onQuickAction(text)}

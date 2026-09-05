@@ -63,6 +63,28 @@ export interface ToolExecution {
   result: any;
 }
 
+export interface FoodOrderProposal {
+  restaurantId: string;
+  restaurantName: string;
+  restaurantCuisine: string;
+  restaurantRating: number;
+  restaurantAddress: string;
+  itemId: string;
+  itemName: string;
+  itemDescription: string;
+  itemPrice: number;
+  deliveryFee: number;
+  totalAmount: number;
+  etaMinutes: number;
+  razorpayOrderId: string;
+  razorpayAmountPaise: number;
+  razorpayKeyId: string;
+  paymentMethod: string;
+  isMock: boolean;
+  foodOrderId: string;
+  user?: { name?: string; email?: string; phone?: string };
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -70,6 +92,7 @@ export interface ChatMessage {
   timestamp: string;
   toolCalls?: ToolExecution[];
   checkoutProposal?: CheckoutProposal;
+  foodOrderProposal?: FoodOrderProposal;
   suggestedPrompts?: string[];
   paymentStatus?: 'unpaid' | 'paying' | 'paid' | 'failed';
   paymentResult?: {

@@ -138,4 +138,58 @@ export const razorpayService = {
       paymentId: paymentId || `pay_${Math.random().toString(36).substr(2, 9)}`,
     };
   },
+
+  // ── REQ 3: Payment Links API — alternative checkout path ─────────────────
+  async createPaymentLink(params: {
+    amount: number;
+    description: string;
+    customerName?: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    expiryMinutes?: number;
+    notes?: Record<string, string>;
+  }): Promise<{ id: string; short_url: string; amount: number; is_mock: boolean }> {
+    const amountInPaise = Math.round(params.amount * 100);
+    const expireBy = Math.floor(Date.now() / 1000) + (params.expiryMinutes || 30) * 60;
+
+    eventBus.emitEvent(
+      'PAYMENT_ORDER_INITIATED',
+      'Razorpay Payment Link Created',
+      `Payment Link for ₹${params.amount} — expires in ${params.expiryMinutes || 30} mins`,
+      { amount: params.amount, description: params.description }
+    );
+
+    if (razorpayInstance) {
+      try {
+        const link = await (razorpayInstance as any).paymentLink.create({
+          amount: amountInPaise,
+          currency: 'INR',
+          description: params.description,
+          expire_by: expireBy,
+          customer: {
+            name: params.customerName || 'Customer',
+            email: params.customerEmail || '',
+            contact: params.customerPhone || '',
+          },
+          notify: { sms: false, email: false },
+          reminder_enable: false,
+          notes: params.notes || {},
+        });
+
+        console.log('✅ Real Razorpay Payment Link created:', link.id, '→', link.short_url);
+        return { id: link.id, short_url: link.short_url, amount: params.amount, is_mock: false };
+      } catch (error: any) {
+        console.error('❌ Payment Link creation failed, using mock:', error?.message);
+      }
+    }
+
+    // Mock fallback
+    const mockId = `plink_${Math.random().toString(36).substr(2, 9)}`;
+    return {
+      id: mockId,
+      short_url: `https://rzp.io/l/${mockId}`,
+      amount: params.amount,
+      is_mock: true,
+    };
+  },
 };

@@ -167,6 +167,7 @@ export const App: React.FC = () => {
         timestamp: new Date().toISOString(),
         toolCalls: response.toolCalls,
         checkoutProposal: response.checkoutProposal,
+        foodOrderProposal: response.foodOrderProposal,
         reminderDetails: response.reminderDetails,
         suggestedPrompts: response.suggestedPrompts || ['Confirm & Pay', 'Actually make it ₹500'],
       };
